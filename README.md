@@ -33,7 +33,7 @@ realistically do.
 Needs Python 3.8 or newer. There is nothing to install.
 
 ```bash
-git clone https://github.com/<your-username>/StudentPlanner.git
+git clone https://github.com/<sequeirajovin24-create>/StudentPlanner.git
 cd StudentPlanner
 python server.py
 ```
@@ -50,7 +50,7 @@ The app files in this repository work without the server. Host them on any
 static host over HTTPS, for example **GitHub Pages**:
 
 1. Repository **Settings > Pages**, deploy from branch `main`, folder `/ (root)`.
-2. Open `https://<your-username>.github.io/StudentPlanner/` on your phone.
+2. Open `https://<sequeirajovin24-create>.github.io/StudentPlanner/` on your phone.
 3. Android (Chrome): menu > **Install app**. iPhone (Safari): Share > **Add to Home Screen**.
 
 When there is no server, the app saves tasks in the phone's own storage and
