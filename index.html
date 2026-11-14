@@ -1,0 +1,1373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StudentPlanner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#0d6b8a">
+<meta name="description" content="Study planner and deadline tracker: see what to work on first.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="StudentPlanner">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script>
+/* Apply the saved light/dark choice before first paint so the page never flashes the wrong theme. */
+try { var __t = localStorage.getItem("studplan.theme"); if (__t === "dark" || __t === "light") document.documentElement.setAttribute("data-theme", __t); } catch (e) {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: one centred column. Header (brand, theme, bell, add) over a login stage or the tabbed planner.
+   Today = focus cards beside goals, a week-load chart and warnings. */
+:root {
+  --bg: #f1f4f7;
+  --surface: #ffffff;
+  --ink: #14202b;
+  --muted: #5a6b79;
+  --line: #d9e0e7;
+  --accent: #0d6b8a;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcedf3;
+  --spark: #e8a317;
+  --spark-ink: #2b1d00;
+  --spark-soft: #fbe8b8;
+  --bad: #b4281f;
+  --bad-soft: #fbe5e3;
+  --warn: #8a5a00;
+  --warn-soft: #fbefd3;
+  --good: #1d7a47;
+  --good-soft: #def2e6;
+  --shadow: 0 18px 44px -22px rgba(13, 107, 138, 0.55);
+  --shadow-lg: 0 16px 40px -12px rgba(20, 32, 43, 0.35);
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e161d; --surface: #16212b; --ink: #e6edf3; --muted: #93a4b3; --line: #2a3945;
+    --accent: #4fb6d6; --accent-ink: #06222c; --accent-soft: #15333f;
+    --spark: #ffc247; --spark-ink: #2b1d00; --spark-soft: #4a3a10;
+    --bad: #ff8a80; --bad-soft: #3a1c1b; --warn: #f0be5c; --warn-soft: #3a2d10;
+    --good: #6fd09a; --good-soft: #14301f;
+    --shadow: 0 18px 44px -22px rgba(0, 0, 0, 0.8); --shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e161d; --surface: #16212b; --ink: #e6edf3; --muted: #93a4b3; --line: #2a3945;
+  --accent: #4fb6d6; --accent-ink: #06222c; --accent-soft: #15333f;
+  --spark: #ffc247; --spark-ink: #2b1d00; --spark-soft: #4a3a10;
+  --bad: #ff8a80; --bad-soft: #3a1c1b; --warn: #f0be5c; --warn-soft: #3a2d10;
+  --good: #6fd09a; --good-soft: #14301f;
+  --shadow: 0 18px 44px -22px rgba(0, 0, 0, 0.8); --shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-block: 20px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.app { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 20px; }
+.brand h1 { font-size: 30px; line-height: 1; }
+.brand p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.top-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.user { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.user b { color: var(--ink); }
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 8px; font-weight: 500; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.btn.danger { color: var(--bad); }
+.btn.danger.armed { background: var(--bad); color: var(--surface); border-color: var(--bad); }
+.btn:disabled { opacity: 0.7; cursor: progress; }
+.icon-btn { position: relative; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; padding: 0; }
+.icon-btn:hover { border-color: var(--accent); }
+.icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#themeBtn .i-sun { display: none; }
+#themeBtn[data-mode="dark"] .i-sun { display: block; }
+#themeBtn[data-mode="dark"] .i-moon { display: none; }
+.badge { position: absolute; top: -6px; right: -6px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--spark); color: var(--spark-ink); font-size: 11px; font-weight: 700; line-height: 19px; text-align: center; border: 2px solid var(--bg); }
+
+/* notifications */
+.note-wrap { position: relative; }
+.note-panel { position: absolute; right: 0; top: calc(100% + 10px); width: min(390px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 14px; z-index: 30; display: flex; flex-direction: column; gap: 10px; }
+.note-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.note-head h2 { font-size: 18px; }
+.note-head .btns { display: flex; gap: 6px; }
+.note-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow: auto; }
+.note { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); }
+.note.unread { background: var(--accent-soft); border-color: transparent; }
+.note .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; grid-row: span 3; background: var(--warn); }
+.note.goal .dot { background: var(--good); }
+.note b { font-size: 14px; }
+.note span.body { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.note time { font-size: 12px; color: var(--muted); }
+.note-perm { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tab { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; color: var(--muted); font-weight: 500; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+.notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; background: var(--accent-soft); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.panel h2 { font-size: 20px; margin-bottom: 12px; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.panel-head h2 { margin: 0; }
+
+/* forms */
+form.task-form { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; grid-column: span 2; }
+.field.wide { grid-column: span 3; }
+.wide-note { grid-column: 1 / -1; margin: 0; }
+.field.full { grid-column: 1 / -1; }
+.field label, .field legend { font-size: 13px; font-weight: 600; color: var(--muted); padding: 0; }
+.field input[type="text"], .field input[type="date"], .field input[type="time"], .field input[type="number"], .field input[type="password"] {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; min-width: 0;
+}
+.field input:focus-visible { outline-offset: 0; border-color: var(--accent); }
+fieldset.field { border: 0; margin: 0; padding: 0; }
+.seg { display: flex; gap: 4px; }
+.seg label { flex: 1; text-align: center; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: block; padding: 8px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); cursor: pointer; font-family: var(--font-data); }
+.seg input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.seg input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+.form-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.form-error { color: var(--bad); font-size: 14px; flex: 1 1 200px; }
+.hint { color: var(--muted); font-size: 13px; }
+
+/* today */
+.today-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.focus-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; }
+.focus-card .rank { min-width: 24px; font-family: var(--font-display); font-size: 34px; line-height: 1; color: var(--accent); grid-row: span 3; }
+.focus-card h3 { font-size: 18px; line-height: 1.25; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: var(--muted); font-size: 14px; }
+.card-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.need { font-size: 14px; }
+.need b { font-family: var(--font-data); font-weight: 500; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+.chip.late { background: var(--bad-soft); color: var(--bad); }
+.chip.soon { background: var(--warn-soft); color: var(--warn); }
+.chip.done { background: var(--good-soft); color: var(--good); }
+.card-actions { display: flex; gap: 6px; }
+
+.warn-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.warn-list li { padding: 8px 10px; border-radius: 8px; font-size: 14px; }
+.warn-list li.late { background: var(--bad-soft); color: var(--bad); }
+.warn-list li.load { background: var(--warn-soft); color: var(--warn); }
+.warn-list li.ok { background: var(--good-soft); color: var(--good); }
+
+.meter { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.meter > i { display: block; height: 100%; width: var(--w, 0); background: var(--accent); border-radius: 4px; }
+.meter.ok > i { background: var(--good); }
+.goal + .goal { margin-top: 14px; }
+.goal-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 14px; }
+
+.plot { position: relative; height: 130px; margin-top: 18px; border-bottom: 1px solid var(--line); }
+.plot-cols, .plot-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.plot-cols { position: absolute; inset: 0; }
+.plot .col { position: relative; min-width: 0; }
+.plot .bar { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); border-radius: 4px 4px 0 0; }
+.plot .bar.over { background: var(--warn); }
+.plot .val { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--font-data); font-size: 12px; }
+.plot-days { margin-top: 6px; }
+.plot-days span { text-align: center; font-size: 12px; color: var(--muted); }
+.plot-days span.today { color: var(--ink); font-weight: 700; }
+.limit-line { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--bad); pointer-events: none; }
+.limit-label { position: absolute; left: 0; bottom: 2px; font-size: 11px; color: var(--bad); background: var(--surface); padding: 0 3px; }
+
+/* list */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.toolbar select { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.toolbar label.check { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.row { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; }
+.row.is-done .title { text-decoration: line-through; color: var(--muted); }
+.check-btn { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); background: var(--bg); padding: 0; display: grid; place-items: center; color: transparent; }
+.check-btn:hover { border-color: var(--good); }
+.is-done .check-btn { background: var(--good); border-color: var(--good); color: var(--surface); }
+.row .title { font-weight: 600; overflow-wrap: anywhere; }
+.row .score { font-family: var(--font-data); font-size: 14px; text-align: right; }
+.row .score small { display: block; color: var(--muted); font-size: 11px; font-family: var(--font-body); }
+.row .actions { grid-column: 2 / -1; display: flex; gap: 6px; }
+
+/* summary */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.stat .n { font-family: var(--font-data); font-size: 30px; line-height: 1.1; }
+.stat .l { color: var(--muted); font-size: 13px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.plain-list { margin: 0; padding-left: 18px; }
+.plain-list li { margin-bottom: 4px; }
+textarea.fallback { width: 100%; min-height: 160px; font-family: var(--font-data); font-size: 13px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.empty { color: var(--muted); padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: 12px; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(20px, env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 10px; font-size: 14px; z-index: 50; max-width: min(460px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 1px; }
+.toast strong { font-family: var(--font-display); font-size: 15px; }
+.toast.due { border-left: 5px solid var(--warn-soft); }
+.toast.goal { border-left: 5px solid var(--spark); }
+
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 45; }
+.confetti i { position: absolute; top: -16px; width: 8px; height: 14px; border-radius: 2px; }
+.confetti i:nth-child(4n+1) { background: var(--accent); }
+.confetti i:nth-child(4n+2) { background: var(--spark); }
+.confetti i:nth-child(4n+3) { background: var(--good); }
+.confetti i:nth-child(4n) { background: var(--bad); }
+
+/* login stage */
+.auth { position: relative; isolation: isolate; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 40px; align-items: center; padding: 40px; border: 1px solid var(--line); border-radius: 22px; background-color: var(--surface); background-image: radial-gradient(var(--line) 1px, transparent 1.4px); background-size: 20px 20px; }
+.auth-blob { position: absolute; z-index: -1; border-radius: 50%; filter: blur(56px); opacity: 0.55; pointer-events: none; }
+.auth-blob.b1 { width: 340px; height: 340px; left: -90px; top: -110px; background: var(--accent-soft); }
+.auth-blob.b2 { width: 300px; height: 300px; right: -70px; bottom: -120px; background: var(--spark-soft); }
+.greeting { margin: 0 0 10px; font-weight: 600; color: var(--accent); font-size: 15px; }
+.auth-headline { font-size: 42px; line-height: 1.08; }
+.hl { background: linear-gradient(transparent 64%, var(--spark-soft) 64%); padding: 0 2px; }
+.auth-lede { color: var(--muted); max-width: 46ch; margin: 14px 0 0; font-size: 16px; }
+.demo { list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-width: 420px; }
+.demo li { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 7px; }
+.demo li:nth-child(2) { margin-left: 18px; }
+.demo li:nth-child(3) { margin-left: 36px; }
+.demo-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
+.demo-top b { font-weight: 600; }
+.demo .meter > i { width: var(--w); }
+.demo .meter.hot > i { background: var(--bad); }
+.demo-score { font-size: 12px; color: var(--muted); }
+.formula { display: inline-block; margin-top: 18px; padding: 8px 12px; background: var(--accent-soft); color: var(--accent); border-radius: 8px; font-size: 14px; max-width: 100%; overflow-wrap: anywhere; }
+.auth-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px; box-shadow: var(--shadow); }
+.auth-card h2 { font-size: 24px; margin: 16px 0 4px; }
+.auth-sub { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+.auth-tabs { position: relative; display: grid; grid-template-columns: 1fr 1fr; background: var(--bg); border: 1px solid var(--line); border-radius: 11px; padding: 3px; }
+.auth-tabs::before { content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); background: var(--surface); border-radius: 8px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); }
+.auth-tabs[data-mode="signup"]::before { transform: translateX(100%); }
+.auth-tabs button { position: relative; background: none; border: 0; padding: 8px; font-weight: 600; color: var(--muted); border-radius: 8px; }
+.auth-tabs button[aria-selected="true"] { color: var(--ink); }
+.auth-card form { display: flex; flex-direction: column; gap: 14px; }
+.auth-card .field { grid-column: auto; }
+.auth-card .field input { padding: 10px 12px; transition: border-color 0.15s, box-shadow 0.15s; }
+.auth-card .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); outline: none; }
+.auth-card .btn.primary { padding: 11px 14px; font-size: 16px; }
+.auth-card .form-error { flex: none; margin: 0; min-height: 1.4em; }
+.opt { font-weight: 400; color: var(--muted); }
+.sub-head { grid-column: 1 / -1; font-size: 17px; margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--line); }
+.link-btn { background: none; border: 0; padding: 2px 0; color: var(--accent); font: inherit; font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.link-btn:hover { color: var(--ink); }
+.auth-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; }
+.auth-note { margin: 0; padding: 9px 12px; border-radius: 9px; background: var(--accent-soft); color: var(--ink); font-size: 14px; }
+.code-input { letter-spacing: 0.18em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.strength { display: flex; align-items: center; gap: 5px; }
+.strength span { flex: 1; height: 5px; border-radius: 3px; background: var(--line); }
+.strength em { font-style: normal; font-size: 12px; color: var(--muted); min-width: 64px; text-align: right; }
+.strength[data-level="1"] span:nth-child(-n+1) { background: var(--bad); }
+.strength[data-level="2"] span:nth-child(-n+2) { background: var(--warn); }
+.strength[data-level="3"] span:nth-child(-n+3) { background: var(--accent); }
+.strength[data-level="4"] span:nth-child(-n+4) { background: var(--good); }
+.btn.busy::after { content: ""; display: inline-block; width: 14px; height: 14px; margin-left: 10px; vertical-align: -2px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; }
+
+@media (max-width: 760px) {
+  .today-grid { grid-template-columns: minmax(0, 1fr); }
+  form.task-form { grid-template-columns: repeat(2, 1fr); }
+  .field, .field.wide { grid-column: span 1; }
+  .field.title-field, .field.full { grid-column: 1 / -1; }
+  .brand h1 { font-size: 26px; }
+  .auth { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 22px 16px; }
+  .auth-headline { font-size: 32px; }
+  .demo li:nth-child(2) { margin-left: 10px; }
+  .demo li:nth-child(3) { margin-left: 20px; }
+  .note-wrap { position: static; }
+  .note-panel { position: fixed; left: 10px; right: 10px; width: auto; top: auto; bottom: calc(max(12px, env(safe-area-inset-bottom, 0px)) + 78px); max-height: min(62vh, 460px); max-height: min(62dvh, 460px); overflow-y: auto; transform-origin: 100% 100%; }
+}
+
+/* Motion is added only when the viewer has not asked to reduce it; without it everything above is already in its final state. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes shine { 0% { background-position: 170% 0; } 34%, 100% { background-position: -70% 0; } }
+  @keyframes glow { 0%, 100% { filter: drop-shadow(0 0 1.5px color-mix(in srgb, var(--accent) 40%, transparent)); } 50% { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 95%, transparent)) brightness(1.15); } }
+  .icon-btn::after, .btn.primary::after { animation: shine 3.6s ease-in-out infinite; }
+  #fxBtn::after { animation-delay: 0.2s; } #themeBtn::after { animation-delay: 0.6s; } #bellBtn::after { animation-delay: 1s; } #addBtn::after { animation-delay: 1.4s; }
+  .icon-btn svg, .btn svg.ic { animation: glow 3s ease-in-out infinite; }
+  .tab svg { animation: glow 3s ease-in-out infinite; }
+  #pwBtn svg { animation-delay: 0.5s; } #logoutBtn svg { animation-delay: 1s; } #tab-all svg { animation-delay: 0.8s; } #tab-summary svg { animation-delay: 1.6s; }
+  .icon-btn svg, .tab svg, .btn svg.ic { transition: transform 0.28s cubic-bezier(0.3, 1.7, 0.5, 1); }
+  .icon-btn:hover { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+  .icon-btn:hover svg { transform: scale(1.2) rotate(-10deg); }
+  .tab:hover svg { transform: translateY(-3px) rotate(-8deg) scale(1.15); }
+  .tab[aria-selected="true"] svg { animation: tabBounce 0.7s cubic-bezier(0.3, 1.5, 0.5, 1), glow 3s ease-in-out infinite; }
+  .btn:hover svg.ic-plus { transform: rotate(90deg) scale(1.15); }
+  .btn:hover svg.ic-user { transform: translateY(-2px) scale(1.15); }
+  .btn:hover svg.ic-out { transform: translateX(3px); }
+  .btn:hover .ic-check path { animation: drawCheck 0.5s ease-out; }
+  #themeBtn svg { animation: spinIn 0.6s cubic-bezier(0.3, 1.4, 0.5, 1) backwards, glow 3s ease-in-out 0.6s infinite; }
+  #themeBtn:hover svg { transform: rotate(35deg) scale(1.2); }
+  .i-sun .rays { transform-box: view-box; transform-origin: 50% 50%; animation: sunSpin 14s linear infinite; }
+  .i-moon path { transform-box: view-box; transform-origin: 50% 50%; animation: moonRock 4.5s ease-in-out infinite; }
+  #bellBtn.has-new svg { transform-origin: 50% 12%; animation: ring 2s ease-in-out infinite, glow 3s ease-in-out infinite; }
+  #bellBtn:hover svg { transform-origin: 50% 12%; animation: ring 0.8s ease-in-out, glow 3s ease-in-out infinite; }
+  #bellBtn.has-new .badge { animation: badgePop 1.6s ease-in-out infinite; }
+  .fx-btn[aria-pressed="true"] svg { animation: cubeTurn 6s linear infinite, glow 3s ease-in-out infinite; }
+  .logo { animation: logoFloat 3.6s ease-in-out infinite, glow 3s ease-in-out infinite; }
+  .logo .tassel { transform-box: fill-box; transform-origin: 50% 0; animation: tassel 2.4s ease-in-out infinite; }
+  @keyframes spinIn { from { transform: rotate(-200deg) scale(0.2); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes sunSpin { to { transform: rotate(360deg); } }
+  @keyframes moonRock { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
+  @keyframes ring { 0%, 55%, 100% { transform: rotate(0); } 8% { transform: rotate(16deg); } 16% { transform: rotate(-14deg); } 24% { transform: rotate(10deg); } 32% { transform: rotate(-8deg); } 40% { transform: rotate(4deg); } }
+  @keyframes badgePop { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.22); } }
+  @keyframes cubeTurn { from { transform: perspective(90px) rotateY(0); } to { transform: perspective(90px) rotateY(360deg); } }
+  @keyframes tabBounce { 0% { transform: scale(0.6) rotate(-20deg); } 60% { transform: scale(1.3) rotate(8deg); } 100% { transform: none; } }
+  @keyframes drawCheck { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  @keyframes logoFloat { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
+  @keyframes tassel { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(14deg); } }
+  .btn, .tab, .icon-btn { transition: border-color 0.15s, background-color 0.15s, transform 0.1s; }
+  .btn:active, .icon-btn:active { transform: scale(0.97); }
+  body { transition: background-color 0.3s, color 0.3s; }
+  .auth-tabs::before { transition: transform 0.28s cubic-bezier(0.3, 0.9, 0.3, 1); }
+  .auth-blob.b1 { animation: drift 14s ease-in-out infinite alternate; }
+  .auth-blob.b2 { animation: drift 17s ease-in-out infinite alternate-reverse; }
+  .demo li { animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both, bob 5s ease-in-out infinite; animation-delay: calc(var(--i) * 0.08s), calc(var(--i) * 0.6s + 0.8s); }
+  .demo .meter > i { animation: fill 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i) * 0.08s + 0.2s); }
+  .demo .chip.late { animation: pulse 2.4s ease-in-out infinite; }
+  .auth-card { animation: pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+  .auth-card.shake { animation: shake 0.4s; }
+  .btn.busy::after { animation: spin 0.7s linear infinite; }
+  .note-panel { animation: pop 0.18s ease-out both; }
+  .toast { animation: slide 0.25s ease-out both; }
+  .confetti i { animation: fall var(--d) cubic-bezier(0.2, 0.7, 0.4, 1) forwards; }
+  .meter > i { transition: width 0.5s ease; }
+  .top { transition: background-color 0.25s, box-shadow 0.25s, backdrop-filter 0.25s; }
+  html.js-rv .rv { opacity: 0; transform: translateY(28px) scale(0.98); transition: opacity 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  html.js-rv .rv.in { opacity: 1; transform: none; }
+  .welcome.show .welcome-card { animation: welcome 2.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+}
+@keyframes drift { to { transform: translate(60px, 40px) scale(1.15); } }
+/* ---- scroll effects and 3D background (scene.js) ---- */
+.top { position: sticky; top: 0; z-index: 30; margin-inline: -16px; padding: 12px 16px; border-radius: 0 0 14px 14px; }
+@media (max-width: 640px) { .top { position: static; margin-inline: 0; padding: 0; } }
+html.scrolled .top { background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3); box-shadow: 0 8px 24px -16px rgba(0, 0, 0, 0.45); }
+.scroll-progress { position: fixed; left: 0; top: 0; height: 3px; width: 100%; z-index: 60; transform-origin: 0 50%; transform: scaleX(var(--p, 0)); background: linear-gradient(90deg, var(--accent), var(--spark)); pointer-events: none; }
+html[data-fx="on"] .tabs, html[data-fx="on"] .panel, html[data-fx="on"] .focus-card, html[data-fx="on"] .row, html[data-fx="on"] .auth-card, html[data-fx="on"] .empty {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2);
+}
+.fx-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.fx-btn[aria-pressed="false"] { color: var(--muted); }
+.fx-btn[aria-pressed="false"] svg { opacity: 0.55; }
+.welcome { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; pointer-events: none; }
+.welcome-card { text-align: center; padding: 22px 38px; border-radius: 22px; background: color-mix(in srgb, var(--surface) 78%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid var(--line); box-shadow: var(--shadow-lg); }
+.welcome-card span { display: block; color: var(--muted); font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; }
+.welcome-card b { display: block; font-family: var(--font-display); font-size: clamp(30px, 7vw, 52px); line-height: 1.1; color: var(--accent); overflow-wrap: anywhere; }
+/* ---- icons ---- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn svg.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.tab { display: inline-flex; align-items: center; gap: 7px; }
+.tab svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tab[aria-selected="true"] svg { color: var(--accent); }
+.brand h1 { display: flex; align-items: center; gap: 10px; }
+.logo { width: 34px; height: 34px; flex: none; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.logo .tassel { stroke: var(--spark); }
+.ic-check path { stroke-dasharray: 1; stroke-dashoffset: 0; }
+/* ---- shine: every icon glows softly, and a glint sweeps over the buttons ---- */
+.icon-btn svg, .tab svg, .btn svg.ic, .logo { filter: drop-shadow(0 0 2.5px color-mix(in srgb, var(--accent) 55%, transparent)); }
+.icon-btn::after, .btn.primary::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(115deg, transparent 36%, color-mix(in srgb, var(--accent) 28%, transparent) 45%, rgba(255, 255, 255, 0.9) 50%, color-mix(in srgb, var(--accent) 28%, transparent) 55%, transparent 64%);
+  background-size: 280% 100%; background-position: 170% 0; background-repeat: no-repeat;
+}
+.btn.primary { position: relative; }
+@media (pointer: coarse) {
+  .icon-btn { width: 44px; height: 44px; }
+  .btn.small { padding: 9px 13px; min-height: 40px; }
+  .tab { padding: 13px 14px; }
+}
+@media (hover: none) {
+  .icon-btn:hover svg, .tab:hover svg, .btn:hover svg.ic { transform: none !important; }
+}
+@media (max-width: 640px) {
+  input, textarea, select { font-size: 16px !important; }
+  body { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .brand h1 { font-size: 24px; }
+  .logo { width: 28px; height: 28px; }
+}
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes welcome { 0% { opacity: 0; transform: scale(0.8) translateY(14px); filter: blur(8px); } 18% { opacity: 1; transform: none; filter: none; } 78% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(1.06); filter: blur(6px); } }
+@keyframes bob { 50% { transform: translateY(-3px); } }
+@keyframes fill { from { width: 0; } }
+@keyframes pulse { 50% { box-shadow: 0 0 0 5px var(--bad-soft); } }
+@keyframes pop { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+@keyframes shake { 20%, 60% { transform: translateX(-7px); } 40%, 80% { transform: translateX(7px); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes slide { from { opacity: 0; transform: translate(-50%, 12px); } }
+@keyframes fall { from { transform: translate3d(0, 0, 0) rotate(var(--r)); } to { transform: translate3d(var(--x), 108vh, 0) rotate(calc(var(--r) + 560deg)); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="scroll-progress" id="scrollBar" aria-hidden="true"></div>
+  <header class="top">
+    <div class="brand">
+      <h1><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 5 3 11.5 16 18l13-6.5z"/><path d="M8 15v6.5c0 1.8 3.6 3.5 8 3.5s8-1.7 8-3.5V15"/><path class="tassel" d="M29 11.5V19"/></svg>StudentPlanner</h1>
+      <p id="todayLabel">Offline study planner</p>
+    </div>
+    <div class="top-actions">
+      <div class="user" id="userBox" hidden>
+        <span>Signed in as <b id="userName"></b></span>
+        <button class="btn small" id="pwBtn" type="button"><svg class="ic ic-user" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Account</button>
+        <button class="btn small" id="logoutBtn" type="button"><svg class="ic ic-out" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Log out</button>
+      </div>
+      <button class="btn small" id="installBtn" type="button" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Install app</button>
+      <button class="icon-btn fx-btn" id="fxBtn" type="button" aria-pressed="true" aria-label="3D effects: on" title="3D effects: on" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20 7v10l-8 4.5L4 17V7z"/><path d="M4 7l8 4.5L20 7M12 11.5v10"/></svg>
+      </button>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><g class="rays"><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>
+      </button>
+      <div class="note-wrap" id="noteWrap" hidden>
+        <button class="icon-btn" id="bellBtn" type="button" aria-label="Notifications" aria-expanded="false" aria-controls="notePanel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span class="badge" id="bellBadge" hidden>0</span>
+        </button>
+        <section class="note-panel" id="notePanel" hidden aria-label="Notifications">
+          <div class="note-head">
+            <h2>Notifications</h2>
+            <span class="btns">
+              <button class="btn small" id="noteRead" type="button">Mark all read</button>
+              <button class="btn small" id="noteClear" type="button">Clear</button>
+            </span>
+          </div>
+          <ul class="note-list" id="noteList"></ul>
+          <div class="note-perm" id="permBox">
+            <span id="permText">Alerts show here while StudentPlanner is open in a browser tab.</span>
+            <button class="btn small" id="permBtn" type="button" hidden>Turn on desktop alerts</button>
+          </div>
+        </section>
+      </div>
+      <button class="btn primary" id="addBtn" type="button"><svg class="ic ic-plus" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add task</button>
+    </div>
+  </header>
+
+  <section class="auth" id="auth" hidden aria-labelledby="authTitle">
+    <div class="auth-blob b1" aria-hidden="true"></div>
+    <div class="auth-blob b2" aria-hidden="true"></div>
+    <div class="auth-intro">
+      <p class="greeting" id="greeting">Hello</p>
+      <h2 class="auth-headline">Know what to <span class="hl">work on first.</span></h2>
+      <p class="auth-lede">StudentPlanner ranks your assignments by how much work each one needs per remaining day, reminds you an hour before a deadline, and cheers when you hit your goals.</p>
+      <ul class="demo" aria-label="Example of how StudentPlanner ranks tasks">
+        <li style="--i:0"><div class="demo-top"><b>Physics lab report</b><span class="chip late">2 days late</span></div><div class="meter hot"><i style="--w:100%"></i></div><span class="demo-score num">urgency 64.0</span></li>
+        <li style="--i:1"><div class="demo-top"><b>Calculus problem set</b><span class="chip soon">Due tomorrow</span></div><div class="meter"><i style="--w:34%"></i></div><span class="demo-score num">urgency 12.0</span></li>
+        <li style="--i:2"><div class="demo-top"><b>Data structures</b><span class="chip">Due in 3 days</span></div><div class="meter"><i style="--w:22%"></i></div><span class="demo-score num">urgency 10.0</span></li>
+      </ul>
+      <p class="formula num">urgency = priority &times; hours &divide; days left</p>
+    </div>
+    <div class="auth-card" id="authCard">
+      <div class="auth-tabs" id="authTabs" role="tablist" aria-label="Log in or create an account" data-mode="login">
+        <button type="button" role="tab" id="authTabLogin" data-auth="login" aria-selected="true">Log in</button>
+        <button type="button" role="tab" id="authTabSignup" data-auth="signup" aria-selected="false">Create account</button>
+      </div>
+      <h2 id="authTitle">Welcome back</h2>
+      <p class="auth-sub" id="authSub">Log in to see what to work on first.</p>
+      <form id="authForm" novalidate>
+        <p class="auth-note" id="authNote" role="status" hidden></p>
+        <div class="field">
+          <label for="a-user">Username</label>
+          <input type="text" id="a-user" autocomplete="username" autocapitalize="none" spellcheck="false">
+        </div>
+        <div class="field" id="codeField" hidden>
+          <label for="a-code">Reset code</label>
+          <input type="text" id="a-code" class="code-input" placeholder="ABCD-EFGH" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="12">
+        </div>
+        <div class="field" id="passField">
+          <label for="a-pass" id="passLabel">Password</label>
+          <input type="password" id="a-pass" autocomplete="current-password">
+        </div>
+        <div class="strength" id="strength" data-level="0" hidden aria-live="polite">
+          <span></span><span></span><span></span><span></span><em id="strengthLabel"></em>
+        </div>
+        <label class="check-row" id="showRow"><input type="checkbox" id="a-show"> Show password</label>
+        <p class="hint" id="a-rules" hidden>Username: 3 to 30 letters, numbers, dots, dashes or underscores. Password: at least 8 characters.</p>
+        <button class="btn primary" type="submit" id="authBtn">Log in</button>
+        <p class="form-error" id="authError" role="alert"></p>
+        <div class="auth-links">
+          <button class="link-btn" type="button" id="forgotLink">Forgot password?</button>
+          <button class="link-btn" type="button" id="resendLink" hidden>Send a new code</button>
+          <button class="link-btn" type="button" id="backLink" hidden>Back to log in</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel" id="formPanel" hidden aria-labelledby="formTitle">
+    <h2 id="formTitle">Add task</h2>
+    <form class="task-form" id="taskForm" novalidate>
+      <input type="hidden" id="f-id">
+      <div class="field full title-field">
+        <label for="f-title">Title</label>
+        <input type="text" id="f-title" placeholder="e.g. Thermodynamics problem set 4" autocomplete="off">
+      </div>
+      <div class="field wide">
+        <label for="f-subject">Subject</label>
+        <input type="text" id="f-subject" list="subjectList" placeholder="e.g. Mechanical" autocomplete="off">
+        <datalist id="subjectList"></datalist>
+      </div>
+      <div class="field wide">
+        <label for="f-deadline">Deadline</label>
+        <input type="date" id="f-deadline">
+      </div>
+      <div class="field">
+        <label for="f-hours">Estimated hours</label>
+        <input type="number" id="f-hours" min="0.5" step="0.5" value="2">
+      </div>
+      <div class="field">
+        <label for="f-time">Due time (optional)</label>
+        <input type="time" id="f-time">
+      </div>
+      <fieldset class="field pri">
+        <legend>Priority (1 low, 5 high)</legend>
+        <div class="seg" id="priSeg"></div>
+      </fieldset>
+      <p class="hint full field" style="margin:0">With a due time you get a reminder 1 hour before it. Without one, the task is due at 23:59.</p>
+      <div class="form-actions">
+        <button class="btn primary" type="submit" id="saveBtn">Save task</button>
+        <button class="btn" type="button" id="cancelBtn">Cancel</button>
+        <span class="form-error" id="formError" role="alert"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel" id="goalPanel" hidden aria-labelledby="goalTitle">
+    <h2 id="goalTitle">Your goals</h2>
+    <form class="task-form" id="goalForm" novalidate>
+      <div class="field wide">
+        <label for="g-daily">Tasks to finish each day</label>
+        <input type="number" id="g-daily" min="1" max="20" step="1">
+      </div>
+      <div class="field wide">
+        <label for="g-weekly">Tasks to finish each week (Mon to Sun)</label>
+        <input type="number" id="g-weekly" min="1" max="100" step="1">
+      </div>
+      <div class="form-actions">
+        <button class="btn primary" type="submit" id="goalSave">Save goals</button>
+        <button class="btn" type="button" id="goalCancel">Cancel</button>
+        <span class="form-error" id="goalError" role="alert"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel" id="pwPanel" hidden aria-labelledby="pwTitle">
+    <h2 id="pwTitle">Account</h2>
+    <h3 class="sub-head" style="border:0;padding:0;margin:0 0 10px">Change password</h3>
+    <form class="task-form" id="pwForm" novalidate>
+      <input type="text" id="pw-user" autocomplete="username" hidden tabindex="-1" aria-hidden="true">
+      <div class="field wide">
+        <label for="pw-current">Current password</label>
+        <input type="password" id="pw-current" autocomplete="current-password">
+      </div>
+      <div class="field wide">
+        <label for="pw-new">New password (at least 8 characters)</label>
+        <input type="password" id="pw-new" autocomplete="new-password">
+      </div>
+      <div class="field wide">
+        <label for="pw-again">New password again</label>
+        <input type="password" id="pw-again" autocomplete="new-password">
+      </div>
+      <p class="hint wide-note">Changing it logs you out on every other device or browser.</p>
+      <div class="form-actions">
+        <button class="btn primary" type="submit" id="pwSave">Change password</button>
+        <button class="btn" type="button" id="pwCancel">Cancel</button>
+        <span class="form-error" id="pwError" role="alert"></span>
+      </div>
+    </form>
+  </section>
+
+  <div class="notice" id="notice" hidden>
+    <span>These are example tasks so you can see how ranking works. Your own tasks are saved on this device.</span>
+    <button class="btn small" type="button" id="clearSamples">Clear examples</button>
+  </div>
+
+  <nav class="tabs" id="tabsNav" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" data-view="today" id="tab-today"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.6"/></svg>Today</button>
+    <button class="tab" role="tab" data-view="all" id="tab-all"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>All tasks</button>
+    <button class="tab" role="tab" data-view="summary" id="tab-summary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>Weekly summary</button>
+  </nav>
+
+  <main id="view" role="tabpanel"></main>
+</div>
+<div class="welcome" id="welcome" hidden aria-hidden="true"><div class="welcome-card"><span id="welcomeHi">Welcome back</span><b id="welcomeName"></b></div></div>
+<div class="toast" id="toast" role="status" hidden><strong id="toastTitle"></strong><span id="toastMsg"></span></div>
+<div class="confetti" id="confetti" aria-hidden="true" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  var MS = 86400000, DAILY_LIMIT = 8, MIN_DAYS = 0.5, OVERDUE_MULT = 2, TOP_N = 3, KEY = "studplan.v1";
+  var REMIND_MINUTES = 60, DEFAULT_GOALS = { daily_goal: 2, weekly_goal: 8 };
+
+  /* ---------- dates ---------- */
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function iso(ms) { var d = new Date(ms); return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()); }
+  function parse(s) { var p = String(s).split("-").map(Number); return Date.UTC(p[0], p[1] - 1, p[2]); }
+  function todayISO() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function addDays(s, n) { return iso(parse(s) + n * MS); }
+  function fmtDate(s, opts) { return new Date(parse(s)).toLocaleDateString(undefined, Object.assign({ timeZone: "UTC" }, opts)); }
+  function validDate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(s || "") && iso(parse(s)) === s; }
+  /* A deadline with no time ends at 23:59 local time. */
+  function dueMs(t) {
+    var p = t.deadline.split("-").map(Number), tm = (t.due_time || "23:59").split(":").map(Number);
+    return new Date(p[0], p[1] - 1, p[2], tm[0], tm[1], 0, 0).getTime();
+  }
+  function minutesLeft(t) { return (dueMs(t) - Date.now()) / 60000; }
+  function weekStart(s) { var dow = new Date(parse(s)).getUTCDay(); return addDays(s, -((dow + 6) % 7)); }
+
+  /* ---------- core logic (same rules as planner.py) ---------- */
+  function daysLeft(t, today) { return Math.round((parse(t.deadline) - parse(today)) / MS); }
+  function urgency(t, today) {
+    var d = daysLeft(t, today);
+    var score = t.priority * (t.hours / Math.max(d, MIN_DAYS));
+    return d < 0 ? score * OVERDUE_MULT : score;
+  }
+  function pending(tasks) { return tasks.filter(function (t) { return !t.done; }); }
+  function rank(tasks, today) {
+    return pending(tasks).sort(function (a, b) {
+      return (urgency(b, today) - urgency(a, today)) || (parse(a.deadline) - parse(b.deadline)) || (a.id - b.id);
+    });
+  }
+  function overdue(tasks, today) {
+    return pending(tasks).filter(function (t) { return parse(t.deadline) < parse(today); })
+      .sort(function (a, b) { return parse(a.deadline) - parse(b.deadline); });
+  }
+  function hoursByDay(tasks, today) {
+    var m = {};
+    pending(tasks).forEach(function (t) { if (parse(t.deadline) >= parse(today)) m[t.deadline] = (m[t.deadline] || 0) + t.hours; });
+    return m;
+  }
+  function overloaded(tasks, today) {
+    var m = hoursByDay(tasks, today);
+    return Object.keys(m).sort().filter(function (d) { return m[d] > DAILY_LIMIT; }).map(function (d) { return { date: d, hours: m[d] }; });
+  }
+  function weekly(tasks, today) {
+    var start = addDays(today, -6), end = addDays(today, 7);
+    var completed = tasks.filter(function (t) { return t.done && t.completed_on && t.completed_on >= start && t.completed_on <= today; });
+    var missed = pending(tasks).filter(function (t) { return t.deadline >= start && t.deadline < today; });
+    var upcoming = pending(tasks).filter(function (t) { return t.deadline >= today && t.deadline <= end; });
+    var sum = function (a) { return a.reduce(function (s, t) { return s + t.hours; }, 0); };
+    return { start: start, end: today, completed: completed, missed: missed, hoursDone: sum(completed), hoursPlanned: sum(upcoming) };
+  }
+
+  /* ---------- storage (localStorage with in-memory fallback) ---------- */
+  var mem = null;
+  function seed(today) {
+    var rows = [
+      ["Physics lab report 3", "Physics", -2, 4, 4], ["Calculus problem set 7", "Mathematics", 1, 3, 4],
+      ["Data structures assignment", "Computer Science", 3, 6, 5], ["Circuits mid-term revision", "Electrical", 6, 5, 5],
+      ["Thermodynamics quiz prep", "Mechanical", 6, 4, 3], ["Robotics club proposal", "Club", 12, 2, 2],
+      ["Internship application", "Career", 17, 3, 4]
+    ];
+    var tasks = rows.map(function (r, i) {
+      return { id: i + 1, title: r[0], subject: r[1], deadline: addDays(today, r[2]), hours: r[3], priority: r[4], done: false, completed_on: null, due_time: null, sample: true };
+    });
+    tasks.push({ id: 8, title: "English presentation slides", subject: "English", deadline: addDays(today, -1), hours: 2, priority: 3, done: true, completed_on: addDays(today, -1), due_time: null, sample: true });
+    tasks.push({ id: 9, title: "Chemistry worksheet", subject: "Chemistry", deadline: addDays(today, -4), hours: 2, priority: 2, done: true, completed_on: addDays(today, -5), due_time: null, sample: true });
+    return { tasks: tasks, nextId: 10, settings: Object.assign({}, DEFAULT_GOALS) };
+  }
+  function load() {
+    try {
+      var r = localStorage.getItem(KEY);
+      if (r) { var s = JSON.parse(r); if (s && Array.isArray(s.tasks)) { s.settings = s.settings || Object.assign({}, DEFAULT_GOALS); return s; } }
+    } catch (e) {}
+    return mem;
+  }
+  function save() { mem = state; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  var today = todayISO();
+  /* When served by server.py (http://localhost:8000) tasks live in the database via /api.
+     Opened as a plain file, or with no backend, tasks live in this browser instead. */
+  var useApi = /^https?:$/.test(location.protocol);
+  var mode = "local", loading = useApi, offlineNote = false;
+  var user = null, authRequired = false, authMode = "login", authBusy = false;
+  var state = useApi ? { tasks: [], nextId: 1, settings: Object.assign({}, DEFAULT_GOALS) } : (load() || seed(today));
+  var view = "today", editing = null, armed = null, armTimer = null, subjectFilter = "", showDone = false;
+
+  /* ---------- data operations (backend or browser) ---------- */
+  function apiCall(method, url, body) {
+    var opts = { method: method, headers: {} };
+    if (body) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+    opts.credentials = "same-origin";
+    return fetch(url, opts).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) {
+          var e = new Error(j.error || "Server error " + r.status);
+          e.status = r.status;
+          if (r.status === 401 && url.indexOf("/api/auth/") !== 0 && mode === "api") {
+            sessionEnded(); e.message = "Your session ended. Please log in again.";
+          }
+          throw e;
+        }
+        return j;
+      });
+    });
+  }
+  function sessionEnded() {
+    user = null; authRequired = true; state.tasks = []; armed = null;
+    closeForm(); closeGoals(); closePw(); setAuthMode("login"); render();
+  }
+  function refresh() { return apiCall("GET", "/api/tasks").then(function (list) { state.tasks = list; }); }
+  function loadSettings() { return apiCall("GET", "/api/settings").then(function (g) { state.settings = g; }); }
+  function loadAll() { return refresh().then(loadSettings); }
+  function byId(id) { return state.tasks.filter(function (x) { return x.id === id; })[0]; }
+  function opAdd(f) {
+    if (mode === "api") return apiCall("POST", "/api/tasks", f).then(refresh);
+    state.tasks.push({ id: state.nextId++, title: f.title, subject: f.subject, deadline: f.deadline, hours: f.hours, priority: f.priority, due_time: f.due_time || null, done: false, completed_on: null });
+    save(); return Promise.resolve();
+  }
+  function opUpdate(id, f) {
+    if (mode === "api") return apiCall("PUT", "/api/tasks/" + id, f).then(refresh);
+    var t = byId(id); if (t) Object.assign(t, f);
+    save(); return Promise.resolve();
+  }
+  function opDelete(id) {
+    if (mode === "api") return apiCall("DELETE", "/api/tasks/" + id).then(refresh);
+    state.tasks = state.tasks.filter(function (x) { return x.id !== id; });
+    save(); return Promise.resolve();
+  }
+  function opDone(id, flag) {
+    if (mode === "api") return apiCall("POST", "/api/tasks/" + id + (flag ? "/done" : "/undo")).then(refresh);
+    var t = byId(id); if (t) { t.done = flag; t.completed_on = flag ? today : null; }
+    save(); return Promise.resolve();
+  }
+  function opSaveGoals(g) {
+    if (mode === "api") return apiCall("PUT", "/api/settings", g).then(function (res) { state.settings = res; });
+    state.settings = g; save(); return Promise.resolve();
+  }
+
+  /* ---------- helpers ---------- */
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function h(n) { return (Math.round(n * 10) / 10) + "h"; }
+  function plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }
+  var alertUntil = 0;   /* a reminder or goal message is not replaced by an ordinary one while it is showing */
+  function toast(msg, title, ms, kind) {
+    if (!kind && Date.now() < alertUntil) return;
+    if (kind) alertUntil = Date.now() + (ms || 2200);
+    var t = $("toast");
+    $("toastTitle").textContent = title || ""; $("toastTitle").hidden = !title;
+    $("toastMsg").textContent = msg;
+    t.className = "toast" + (kind ? " " + kind : ""); t.hidden = false;
+    clearTimeout(toast.t); toast.t = setTimeout(function () { t.hidden = true; }, ms || 2200);
+  }
+  function dueChip(t) {
+    if (t.done) return '<span class="chip done">Done ' + esc(fmtDate(t.completed_on || t.deadline, { day: "numeric", month: "short" })) + "</span>";
+    var d = daysLeft(t, today), cls = "chip", txt, at = t.due_time ? " " + t.due_time : "", m = minutesLeft(t);
+    if (d < 0) { cls += " late"; txt = plural(-d, "day") + " late"; }
+    else if (m > 0 && m <= REMIND_MINUTES) { cls += " late"; txt = "Due in " + Math.max(1, Math.ceil(m)) + " min"; }
+    else if (d === 0 && t.due_time && m <= 0) { cls += " late"; txt = "Passed " + t.due_time; }
+    else if (d === 0) { cls += " soon"; txt = "Due today" + at; }
+    else if (d === 1) { cls += " soon"; txt = "Due tomorrow" + at; }
+    else { if (d <= 2) cls += " soon"; txt = "Due in " + d + " days" + at; }
+    return '<span class="' + cls + '">' + txt + "</span>";
+  }
+  function shortDate(s) { return fmtDate(s, { weekday: "short", day: "numeric", month: "short" }); }
+
+  /* ---------- theme (light / dark) ---------- */
+  var dark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function effectiveDark() {
+    var t = document.documentElement.getAttribute("data-theme");
+    return t ? t === "dark" : !!(dark && dark.matches);
+  }
+  function syncTheme() {
+    var d = effectiveDark(), label = d ? "Switch to light mode" : "Switch to dark mode";
+    $("themeBtn").dataset.mode = d ? "dark" : "light";
+    $("themeBtn").setAttribute("aria-label", label); $("themeBtn").title = label;
+  }
+  $("themeBtn").addEventListener("click", function () {
+    var next = effectiveDark() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("studplan.theme", next); } catch (e) {}
+    syncTheme();
+  });
+  if (dark && dark.addEventListener) dark.addEventListener("change", syncTheme);
+
+  /* ---------- notifications ---------- */
+  var notes = [], fired = {}, noteWho = null;
+  function who() { return mode === "api" ? (user ? user.username : null) : "local"; }
+  function storeKey(kind) { return "studplan." + kind + "." + noteWho; }
+  function saveNotes() { try { localStorage.setItem(storeKey("notes"), JSON.stringify(notes)); } catch (e) {} }
+  function saveFired() { try { localStorage.setItem(storeKey("fired"), JSON.stringify(fired)); } catch (e) {} }
+  function loadIdentity() {
+    var w = who();
+    if (w === noteWho) return;
+    noteWho = w; notes = []; fired = {};
+    if (w) {
+      try { notes = JSON.parse(localStorage.getItem(storeKey("notes")) || "[]"); } catch (e) { notes = []; }
+      try { fired = JSON.parse(localStorage.getItem(storeKey("fired")) || "{}"); } catch (e) { fired = {}; }
+      var cutoff = Date.now() - 14 * MS;
+      Object.keys(fired).forEach(function (k) { if (fired[k] < cutoff) delete fired[k]; });
+    }
+    updateBell(); renderNotes();
+  }
+  function markFired(key) { if (fired[key]) return false; fired[key] = Date.now(); saveFired(); return true; }
+  function unreadCount() { return notes.filter(function (n) { return !n.read; }).length; }
+  function updateBell() {
+    var n = unreadCount();
+    $("bellBtn").classList.toggle("has-new", n > 0); $("bellBadge").hidden = n === 0; $("bellBadge").textContent = n > 9 ? "9+" : String(n);
+    $("bellBtn").setAttribute("aria-label", n ? "Notifications, " + n + " unread" : "Notifications");
+  }
+  function noteTime(ts) {
+    var d = new Date(ts), t = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString([], { day: "numeric", month: "short" }) + ", " + t;
+  }
+  function renderNotes() {
+    $("noteList").innerHTML = notes.length ? notes.map(function (n) {
+      return '<li class="note ' + esc(n.kind) + (n.read ? "" : " unread") + '"><span class="dot"></span><b>' + esc(n.title) + '</b><span class="body">' + esc(n.body) + "</span><time>" + esc(noteTime(n.ts)) + "</time></li>";
+    }).join("") : '<li class="hint" style="padding:8px 2px">Nothing yet. Deadline reminders and goal achievements will show up here.</li>';
+  }
+  function systemNotify(title, body, tag) {
+    try { if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body: body, tag: tag }); } catch (e) {}
+  }
+  function notify(kind, title, body) {
+    notes.unshift({ ts: Date.now(), kind: kind, title: title, body: body, read: false });
+    if (notes.length > 50) notes.length = 50;
+    saveNotes(); updateBell(); renderNotes();
+    toast(body, title, 7000, kind);
+    if (document.hidden) systemNotify(title, body, kind + "-" + Date.now());
+  }
+  function updatePerm() {
+    var supported = "Notification" in window, p = supported ? Notification.permission : "unsupported";
+    $("permBtn").hidden = p !== "default";
+    $("permText").textContent = p === "granted" ? "Desktop alerts are on. They appear when this tab is in the background."
+      : p === "denied" ? "Desktop alerts are blocked in your browser settings. In-app alerts still work."
+      : p === "unsupported" ? "Alerts show here while StudentPlanner is open in a browser tab."
+      : "Alerts show here while StudentPlanner is open. Turn on desktop alerts to also get them when the tab is in the background.";
+  }
+  function setPanel(open) {
+    $("notePanel").hidden = !open; $("bellBtn").setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) { updatePerm(); renderNotes(); }
+    else { notes.forEach(function (n) { n.read = true; }); saveNotes(); updateBell(); }
+  }
+  $("bellBtn").addEventListener("click", function () { setPanel($("notePanel").hidden); });
+  $("noteRead").addEventListener("click", function () { notes.forEach(function (n) { n.read = true; }); saveNotes(); updateBell(); renderNotes(); });
+  $("noteClear").addEventListener("click", function () { notes = []; saveNotes(); updateBell(); renderNotes(); });
+  $("permBtn").addEventListener("click", function () {
+    try { Promise.resolve(Notification.requestPermission()).then(updatePerm, updatePerm); } catch (e) { updatePerm(); }
+  });
+  document.addEventListener("click", function (e) { if (!$("notePanel").hidden && !e.target.closest("#noteWrap")) setPanel(false); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !$("notePanel").hidden) { setPanel(false); $("bellBtn").focus(); }
+  });
+
+  /* Deadline reminder: once per task when it is due within the next hour. */
+  function checkDeadlines() {
+    if (!noteWho || loading) return;
+    pending(state.tasks).forEach(function (t) {
+      var m = minutesLeft(t);
+      if (m > 0 && m <= REMIND_MINUTES && markFired("due|" + t.id + "|" + t.deadline + "|" + (t.due_time || ""))) {
+        notify("due", "Due in " + Math.max(1, Math.ceil(m)) + " min", t.title + " (" + t.subject + ") ends at " + (t.due_time || "23:59") + ".");
+      }
+    });
+  }
+  function hasNearDeadline() {
+    return pending(state.tasks).some(function (t) { var m = minutesLeft(t); return m > -1 && m <= REMIND_MINUTES + 1; });
+  }
+  function tick() {
+    var t = todayISO(), rolled = t !== today;
+    if (rolled) today = t;
+    if (loading || (mode === "api" && !user)) return;
+    checkDeadlines();
+    if (rolled || hasNearDeadline()) render();
+  }
+
+  /* ---------- goals ---------- */
+  function goals() { return state.settings || DEFAULT_GOALS; }
+  function goalCounts() {
+    var ws = weekStart(today), d = 0, w = 0;
+    state.tasks.forEach(function (t) {
+      if (t.done && t.completed_on) {
+        if (t.completed_on === today) d++;
+        if (t.completed_on >= ws && t.completed_on <= today) w++;
+      }
+    });
+    return { daily: d, weekly: w };
+  }
+  /* Fires when a completion makes a count land exactly on its goal, once per day / week. */
+  function checkGoals() {
+    var c = goalCounts(), g = goals(), hit = false;
+    if (c.daily === g.daily_goal && markFired("goal|daily|" + today)) {
+      notify("goal", "Daily goal reached", "You finished " + plural(c.daily, "task") + " today. Great work.");
+      hit = true;
+    }
+    if (c.weekly === g.weekly_goal && markFired("goal|weekly|" + weekStart(today))) {
+      notify("goal", "Weekly goal reached", "You finished " + plural(c.weekly, "task") + " this week. Well done.");
+      hit = true;
+    }
+    if (hit) celebrate();
+    return hit;
+  }
+  function celebrate() {
+    if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var box = $("confetti"), html = "";
+    for (var i = 0; i < 40; i++) {
+      html += '<i style="left:' + (Math.random() * 100).toFixed(1) + "%;--x:" + Math.round(Math.random() * 240 - 120) + "px;--r:" + Math.round(Math.random() * 360) +
+        "deg;--d:" + (1.9 + Math.random() * 1.3).toFixed(2) + "s;animation-delay:" + (Math.random() * 0.35).toFixed(2) + 's"></i>';
+    }
+    box.innerHTML = html; box.hidden = false;
+    clearTimeout(celebrate.t); celebrate.t = setTimeout(function () { box.hidden = true; box.innerHTML = ""; }, 3600);
+  }
+  function goalPanel() {
+    var c = goalCounts(), g = goals();
+    function row(label, n, goal) {
+      var pct = Math.min(100, Math.round(n / goal * 100)), reached = n >= goal;
+      return '<div class="goal"><div class="goal-top"><span>' + label + '</span><span class="num">' + n + " / " + goal +
+        (reached ? ' <span class="chip done">Reached</span>' : "") + '</span></div><div class="meter' + (reached ? " ok" : "") +
+        '" role="progressbar" aria-label="' + label + ' goal" aria-valuemin="0" aria-valuemax="' + goal + '" aria-valuenow="' + Math.min(n, goal) +
+        '"><i style="width:' + pct + '%"></i></div></div>';
+    }
+    return '<section class="panel"><div class="panel-head"><h2>Goals</h2><button class="btn small" type="button" data-act="goals">Edit goals</button></div>' +
+      row("Today", c.daily, g.daily_goal) + row("This week", c.weekly, g.weekly_goal) +
+      '<p class="hint" style="margin:12px 0 0">Tasks finished against your goal. You get a notification when you reach one.</p></section>';
+  }
+  function openGoals() {
+    closeForm(); closePw();
+    $("g-daily").value = goals().daily_goal; $("g-weekly").value = goals().weekly_goal;
+    $("goalError").textContent = ""; $("goalPanel").hidden = false; $("g-daily").focus();
+    $("goalPanel").scrollIntoView({ block: "nearest" });
+  }
+  function closeGoals() { $("goalPanel").hidden = true; }
+  $("goalCancel").addEventListener("click", closeGoals);
+  $("goalForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var d = Number($("g-daily").value), w = Number($("g-weekly").value);
+    var err = !(Number.isInteger(d) && d >= 1 && d <= 20) ? "Daily goal must be a whole number from 1 to 20." :
+      !(Number.isInteger(w) && w >= 1 && w <= 100) ? "Weekly goal must be a whole number from 1 to 100." : "";
+    if (err) { $("goalError").textContent = err; return; }
+    opSaveGoals({ daily_goal: d, weekly_goal: w }).then(function () { closeGoals(); render(); toast("Goals saved"); },
+      function (e2) { $("goalError").textContent = e2.message || "Could not save goals."; });
+  });
+
+  /* ---------- views ---------- */
+  function renderToday() {
+    var top = rank(state.tasks, today).slice(0, TOP_N);
+    var cards = top.length ? top.map(function (t, i) {
+      var d = daysLeft(t, today);
+      var need = d < 0 ? "Overdue. Start now." : "Needs about <b>" + h(t.hours / Math.max(d, MIN_DAYS)) + "</b> per day";
+      return '<article class="focus-card"><div class="rank" aria-label="Rank ' + (i + 1) + '">' + (i + 1) + "</div>" +
+        "<h3>" + esc(t.title) + "</h3>" +
+        '<div class="meta"><span>' + esc(t.subject) + "</span>" + dueChip(t) + '<span class="num">' + h(t.hours) + " · P" + t.priority + "</span></div>" +
+        '<div class="card-foot"><span class="need">' + need + '</span><span class="card-actions">' +
+        '<button class="btn small primary" data-act="done" data-id="' + t.id + '"><svg class="ic ic-check" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M5 12.5l4.5 4.5L19 7"/></svg>Mark done</button>' +
+        '<button class="btn small" data-act="edit" data-id="' + t.id + '">Edit</button></span></div></article>';
+    }).join("") : '<div class="empty">Nothing pending. Add a task to see what to work on first.</div>';
+
+    var od = overdue(state.tasks, today), ol = overloaded(state.tasks, today);
+    var warns = od.map(function (t) {
+      return '<li class="late"><b>Overdue:</b> ' + esc(t.title) + " (" + esc(t.subject) + "), was due " + esc(shortDate(t.deadline)) + "</li>";
+    }).concat(ol.map(function (o) {
+      return '<li class="load"><b>Overloaded:</b> ' + esc(shortDate(o.date)) + " has " + h(o.hours) + " of work due (limit " + DAILY_LIMIT + "h). Start earlier.</li>";
+    }));
+    if (!warns.length) warns = ['<li class="ok">No warnings. You are on track.</li>'];
+
+    var map = hoursByDay(state.tasks, today), days = [], max = DAILY_LIMIT + 2;
+    for (var i = 0; i < 7; i++) { var ds = addDays(today, i); days.push({ d: ds, v: map[ds] || 0 }); max = Math.max(max, map[ds] || 0); }
+    var limitPct = (DAILY_LIMIT / max) * 100;
+    var cols = days.map(function (x) {
+      var pct = (x.v / max) * 100;
+      return '<div class="col">' + (x.v ? '<span class="val" style="bottom:calc(' + pct + '% + 3px)">' + h(x.v) + '</span><div class="bar' + (x.v > DAILY_LIMIT ? " over" : "") + '" style="height:' + pct + '%"></div>' : "") + "</div>";
+    }).join("");
+    var labels = days.map(function (x, i) {
+      return '<span' + (i === 0 ? ' class="today"' : "") + ">" + esc(fmtDate(x.d, { weekday: "short" })) + "</span>";
+    }).join("");
+    return '<div class="today-grid"><div class="stack"><h2>Work on these first</h2>' + cards + "</div>" +
+      '<div class="stack">' + goalPanel() +
+      '<section class="panel"><h2>Next 7 days</h2><div class="plot" role="img" aria-label="Hours of work due per day for the next 7 days"><div class="plot-cols">' + cols +
+      '</div><div class="limit-line" style="bottom:' + limitPct + '%"><span class="limit-label">' + DAILY_LIMIT + 'h limit</span></div></div><div class="plot-days">' + labels + '</div>' +
+      '<p class="hint" style="margin:10px 0 0">Hours of work due each day.</p></section>' +
+      '<section class="panel"><h2>Warnings</h2><ul class="warn-list">' + warns.join("") + "</ul></section></div></div>";
+  }
+
+  function renderAll() {
+    var subjects = Array.from(new Set(state.tasks.map(function (t) { return t.subject; }))).sort();
+    if (subjectFilter && subjects.indexOf(subjectFilter) < 0) subjectFilter = "";
+    var items = rank(state.tasks, today);
+    if (showDone) items = items.concat(state.tasks.filter(function (t) { return t.done; }).sort(function (a, b) { return a.id - b.id; }));
+    if (subjectFilter) items = items.filter(function (t) { return t.subject === subjectFilter; });
+    var rows = items.length ? items.map(function (t) {
+      var score = t.done ? "" : '<div class="score">' + urgency(t, today).toFixed(2) + "<small>urgency</small></div>";
+      var del = armed === t.id
+        ? '<button class="btn small danger armed" data-act="delete" data-id="' + t.id + '">Confirm delete</button>'
+        : '<button class="btn small danger" data-act="delete" data-id="' + t.id + '">Delete</button>';
+      return '<li class="row' + (t.done ? " is-done" : "") + '">' +
+        '<button class="check-btn" data-act="toggle" data-id="' + t.id + '" aria-label="' + (t.done ? "Mark as not done: " : "Mark done: ") + esc(t.title) + '">&#10003;</button>' +
+        '<div style="min-width:0"><div class="title">' + esc(t.title) + '</div><div class="meta"><span>' + esc(t.subject) + "</span>" + dueChip(t) +
+        '<span class="num">' + h(t.hours) + " · P" + t.priority + "</span></div></div>" + score +
+        '<div class="actions"><button class="btn small" data-act="edit" data-id="' + t.id + '">Edit</button>' + del + "</div></li>";
+    }).join("") : '<li class="empty">No tasks to show.</li>';
+    return '<div class="stack"><div class="toolbar"><label class="hint" for="subjectFilter">Subject</label>' +
+      '<select id="subjectFilter"><option value="">All subjects</option>' + subjects.map(function (s) {
+        return '<option value="' + esc(s) + '"' + (s === subjectFilter ? " selected" : "") + ">" + esc(s) + "</option>";
+      }).join("") + '</select><label class="check"><input type="checkbox" id="showDone"' + (showDone ? " checked" : "") + "> Show completed</label>" +
+      '<span class="hint">Most urgent first. urgency = priority × hours ÷ days left</span></div><ul class="list">' + rows + "</ul></div>";
+  }
+
+  function summaryMarkdown(s) {
+    var b = function (a) { return a.length ? a.map(function (t) { return "- #" + t.id + " " + t.title + " (" + t.subject + ", " + h(t.hours) + ")"; }).join("\n") : "- none"; };
+    return "# Weekly Summary: " + s.start + " to " + s.end + "\n\n- Tasks completed: " + s.completed.length + " (" + h(s.hoursDone) + ")\n- Tasks missed: " + s.missed.length +
+      "\n- Hours planned for the next 7 days: " + h(s.hoursPlanned) + "\n\n## Completed\n" + b(s.completed) + "\n\n## Missed\n" + b(s.missed) + "\n";
+  }
+  function renderSummary() {
+    var s = weekly(state.tasks, today);
+    var li = function (a, empty) { return a.length ? '<ul class="plain-list">' + a.map(function (t) { return "<li>" + esc(t.title) + ' <span class="hint">' + esc(t.subject) + " · " + h(t.hours) + "</span></li>"; }).join("") + "</ul>" : '<p class="hint">' + empty + "</p>"; };
+    return '<div class="stack"><p class="hint" style="margin:0">' + esc(fmtDate(s.start, { day: "numeric", month: "short" })) + " to " + esc(fmtDate(s.end, { day: "numeric", month: "short", year: "numeric" })) + "</p>" +
+      '<div class="stats"><div class="stat"><div class="n">' + s.completed.length + '</div><div class="l">Tasks completed (' + h(s.hoursDone) + ')</div></div>' +
+      '<div class="stat"><div class="n">' + s.missed.length + '</div><div class="l">Tasks missed</div></div>' +
+      '<div class="stat"><div class="n">' + h(s.hoursPlanned) + '</div><div class="l">Planned for the next 7 days</div></div></div>' +
+      '<div class="two"><section class="panel"><h2>Completed</h2>' + li(s.completed, "Nothing completed yet this week.") + '</section>' +
+      '<section class="panel"><h2>Missed</h2>' + li(s.missed, "No missed deadlines.") + "</section></div>" +
+      '<div><button class="btn" type="button" data-act="copy">Copy summary as Markdown</button></div>' +
+      '<textarea class="fallback" id="copyFallback" readonly hidden aria-label="Summary text"></textarea></div>';
+  }
+
+  function greeting() {
+    var hr = new Date().getHours();
+    return hr < 5 ? "Up late? Let's plan." : hr < 12 ? "Good morning." : hr < 17 ? "Good afternoon." : hr < 22 ? "Good evening." : "Up late? Let's plan.";
+  }
+
+  function render() {
+    var showLogin = mode === "api" && authRequired && !loading;
+    var wasHidden = $("auth").hidden;
+    loadIdentity();
+    $("auth").hidden = !showLogin;
+    $("tabsNav").hidden = showLogin;
+    $("addBtn").hidden = showLogin;
+    $("noteWrap").hidden = showLogin || !noteWho;
+    $("userBox").hidden = !(mode === "api" && user && !authRequired);
+    if (user) $("userName").textContent = user.username;
+    if (showLogin) {
+      $("view").hidden = true; $("notice").hidden = true; $("formPanel").hidden = true; $("goalPanel").hidden = true; $("pwPanel").hidden = true;
+      $("todayLabel").textContent = "Your study planner, ranked by urgency";
+      $("greeting").textContent = greeting();
+      applyAuthMode();
+      if (wasHidden) $("a-user").focus();
+      return;
+    }
+    $("view").hidden = false;
+    $("todayLabel").textContent = fmtDate(today, { weekday: "long", day: "numeric", month: "long", year: "numeric" }) +
+      (loading ? "" : mode === "api" ? " · Saved to your account" : " · Saved in this browser");
+    $("notice").hidden = mode === "api" || !state.tasks.some(function (t) { return t.sample; });
+    ["today", "all", "summary"].forEach(function (v) { $("tab-" + v).setAttribute("aria-selected", v === view ? "true" : "false"); });
+    $("view").setAttribute("aria-labelledby", "tab-" + view);
+    $("view").innerHTML = loading ? '<div class="empty">Loading your tasks…</div>' :
+      view === "today" ? renderToday() : view === "all" ? renderAll() : renderSummary();
+    $("subjectList").innerHTML = Array.from(new Set(state.tasks.map(function (t) { return t.subject; }))).map(function (s) { return '<option value="' + esc(s) + '">'; }).join("");
+    revealAll();
+    checkDeadlines();
+  }
+
+  /* ---------- task form ---------- */
+  function buildPriority() {
+    $("priSeg").innerHTML = [1, 2, 3, 4, 5].map(function (n) {
+      return '<label><input type="radio" name="pri" value="' + n + '"' + (n === 3 ? " checked" : "") + "><span>" + n + "</span></label>";
+    }).join("");
+  }
+  function openForm(task) {
+    closeGoals(); closePw();
+    editing = task ? task.id : null;
+    $("formTitle").textContent = task ? "Edit task" : "Add task";
+    $("f-id").value = task ? task.id : "";
+    $("f-title").value = task ? task.title : "";
+    $("f-subject").value = task ? task.subject : "";
+    $("f-deadline").value = task ? task.deadline : addDays(today, 7);
+    $("f-hours").value = task ? task.hours : 2;
+    $("f-time").value = task && task.due_time ? task.due_time : "";
+    var r = document.querySelector('input[name="pri"][value="' + (task ? task.priority : 3) + '"]'); if (r) r.checked = true;
+    $("formError").textContent = "";
+    $("formPanel").hidden = false;
+    $("f-title").focus();
+    $("formPanel").scrollIntoView({ block: "nearest" });
+  }
+  function closeForm() { $("formPanel").hidden = true; editing = null; }
+
+  $("taskForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var title = $("f-title").value.trim(), subject = $("f-subject").value.trim(), deadline = $("f-deadline").value, time = $("f-time").value;
+    var hours = parseFloat($("f-hours").value), pri = parseInt((document.querySelector('input[name="pri"]:checked') || {}).value, 10);
+    var err = !title ? "Enter a title." : !subject ? "Enter a subject." : !validDate(deadline) ? "Choose a valid deadline." :
+      !(hours > 0) ? "Estimated hours must be more than 0." : !(pri >= 1 && pri <= 5) ? "Pick a priority from 1 to 5." : "";
+    if (err) { $("formError").textContent = err; return; }
+    var fields = { title: title, subject: subject, deadline: deadline, hours: hours, priority: pri, due_time: time || null };
+    var wasEdit = editing != null;
+    (wasEdit ? opUpdate(editing, fields) : opAdd(fields)).then(function () {
+      closeForm(); render(); toast(wasEdit ? "Task updated" : "Task added");
+    }, function (err) { $("formError").textContent = err.message || "Could not save the task."; });
+  });
+  $("cancelBtn").addEventListener("click", closeForm);
+  $("addBtn").addEventListener("click", function () { openForm(null); });
+  $("clearSamples").addEventListener("click", function () {
+    state.tasks = state.tasks.filter(function (t) { return !t.sample; }); save(); render(); toast("Examples cleared");
+  });
+
+  /* ---------- events ---------- */
+  document.querySelector(".tabs").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-view]"); if (b) { view = b.dataset.view; animateNext = true; window.scrollTo(0, 0); render(); }
+  });
+  $("view").addEventListener("change", function (e) {
+    if (e.target.id === "subjectFilter") { subjectFilter = e.target.value; render(); }
+    if (e.target.id === "showDone") { showDone = e.target.checked; render(); }
+  });
+  function afterDone(flag) {
+    render();
+    if (!(flag && checkGoals())) toast(flag ? "Marked done. Nice work!" : "Moved back to pending");
+  }
+  $("view").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]"); if (!b) return;
+    var id = parseInt(b.dataset.id, 10), act = b.dataset.act;
+    var t = state.tasks.filter(function (x) { return x.id === id; })[0];
+    var fail = function (err) { toast((err && err.message) || "Something went wrong"); };
+    if (act === "done" && t) opDone(id, true).then(function () { afterDone(true); }, fail);
+    else if (act === "toggle" && t) { var flag = !t.done; opDone(id, flag).then(function () { afterDone(flag); }, fail); }
+    else if (act === "edit" && t) openForm(t);
+    else if (act === "goals") openGoals();
+    else if (act === "delete" && t) {
+      if (armed === id) { armed = null; opDelete(id).then(function () { render(); toast("Task deleted"); }, fail); }
+      else { armed = id; clearTimeout(armTimer); armTimer = setTimeout(function () { armed = null; render(); }, 3000); render(); }
+    }
+    else if (act === "copy") {
+      var text = summaryMarkdown(weekly(state.tasks, today));
+      var fallback = function () { var ta = $("copyFallback"); ta.value = text; ta.hidden = false; ta.focus(); ta.select(); };
+      try { navigator.clipboard.writeText(text).then(function () { toast("Summary copied"); }, fallback); } catch (err) { fallback(); }
+    }
+  });
+
+  /* ---------- scroll effects, 3D switch, welcome splash ---------- */
+  var reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var revealIO = null, animateNext = true, scrollTick = false;
+  if ("IntersectionObserver" in window && !reduceMotion) {
+    document.documentElement.classList.add("js-rv");
+    revealIO = new IntersectionObserver(function (entries) {
+      var n = 0;
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        en.target.style.transitionDelay = Math.min(n++, 6) * 70 + "ms";
+        en.target.classList.add("in"); revealIO.unobserve(en.target);
+      });
+    }, { threshold: 0.1, rootMargin: "0px 0px -5% 0px" });
+  }
+  function revealAll() {
+    var els = document.querySelectorAll("#view .focus-card, #view .panel, #view .row, #view .empty, #auth .auth-card");
+    Array.prototype.forEach.call(els, function (el) {
+      if (el.classList.contains("rv")) return;
+      el.classList.add("rv");
+      if (revealIO && animateNext) revealIO.observe(el); else el.classList.add("in");   /* re-renders after an edit do not replay */
+    });
+    animateNext = false;
+  }
+  function onScroll() {
+    if (scrollTick) return; scrollTick = true;
+    requestAnimationFrame(function () {
+      scrollTick = false;
+      var max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight), y = window.pageYOffset || 0;
+      $("scrollBar").style.setProperty("--p", Math.min(1, y / max).toFixed(4));
+      document.documentElement.classList.toggle("scrolled", y > 8);
+    });
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll);
+  function syncFx() {
+    var d = document.documentElement.dataset, ok = d.fx === "on" || d.fx === "off";
+    $("fxBtn").hidden = !ok;
+    var on = d.fx === "on";
+    $("fxBtn").setAttribute("aria-pressed", on ? "true" : "false");
+    var label = "3D effects: " + (on ? "on" : "off");
+    $("fxBtn").setAttribute("aria-label", label); $("fxBtn").title = label;
+  }
+  $("fxBtn").addEventListener("click", function () { if (window.StudScene) { StudScene.setEnabled(!StudScene.isEnabled()); syncFx(); } });
+  document.addEventListener("studscene:ready", syncFx);
+  if (document.documentElement.dataset.fxReady) syncFx();
+  function welcomeSplash(name, back) {
+    if (window.StudScene) StudScene.welcome();
+    if (reduceMotion) return;
+    var w = $("welcome");
+    $("welcomeHi").textContent = back ? "Welcome back" : "Welcome";
+    $("welcomeName").textContent = name;
+    w.hidden = false; w.classList.remove("show"); void w.offsetWidth; w.classList.add("show");
+    clearTimeout(welcomeSplash.t); welcomeSplash.t = setTimeout(function () { w.hidden = true; w.classList.remove("show"); }, 2300);
+  }
+
+
+  /* ---------- login page ---------- */
+  function strength(pw) {
+    if (!pw) return { level: 0, label: "" };
+    if (pw.length < 8) return { level: 1, label: "Too short" };
+    var classes = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter(function (r) { return r.test(pw); }).length;
+    var level = 2 + (pw.length >= 12 || classes >= 3 ? 1 : 0) + (pw.length >= 12 && classes >= 3 ? 1 : 0);
+    return { level: level, label: ["", "Too short", "Okay", "Good", "Strong"][level] };
+  }
+  function updateStrength() {
+    var s = strength($("a-pass").value);
+    $("strength").dataset.level = s.level; $("strengthLabel").textContent = s.label;
+  }
+  function applyAuthMode() {
+    var signup = authMode === "signup", forgot = authMode === "forgot", reset = authMode === "reset";
+    var tabs = !forgot && !reset;
+    $("authTabs").hidden = !tabs;
+    $("authTabs").dataset.mode = signup ? "signup" : "login";
+    $("authTabLogin").setAttribute("aria-selected", signup ? "false" : "true");
+    $("authTabSignup").setAttribute("aria-selected", signup ? "true" : "false");
+    $("authTitle").textContent = signup ? "Create your account" : forgot ? "Forgot your password?" : reset ? "Set a new password" : "Welcome back";
+    $("authSub").textContent = signup ? "Free, and your tasks stay private to you." :
+      forgot ? "Enter your username. A one-time code appears in the window where StudentPlanner is running." :
+      reset ? "Type the code you received and choose a new password." : "Log in to see what to work on first.";
+    if (!authBusy) $("authBtn").textContent = signup ? "Create account" : forgot ? "Show me a reset code" : reset ? "Set new password" : "Log in";
+    $("passField").hidden = forgot;
+    $("showRow").hidden = forgot;
+    $("codeField").hidden = !reset;
+    $("passLabel").textContent = reset ? "New password" : "Password";
+    $("a-rules").hidden = !signup; $("strength").hidden = !(signup || reset);
+    $("forgotLink").hidden = authMode !== "login";
+    $("resendLink").hidden = !reset;
+    $("backLink").hidden = !(forgot || reset);
+    $("a-pass").setAttribute("autocomplete", signup || reset ? "new-password" : "current-password");
+    if (!reset) $("a-code").value = "";
+    if (!(forgot || reset)) $("authNote").hidden = true;
+    updateStrength();
+  }
+  function setAuthMode(m) { authMode = m; $("authError").textContent = ""; applyAuthMode(); }
+  function authNote(msg) { $("authNote").textContent = msg; $("authNote").hidden = !msg; }
+
+  $("authTabs").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-auth]"); if (b) { setAuthMode(b.dataset.auth); $("a-user").focus(); }
+  });
+  $("forgotLink").addEventListener("click", function () { authNote(""); setAuthMode("forgot"); $("a-user").focus(); });
+  $("backLink").addEventListener("click", function () { $("a-pass").value = ""; setAuthMode("login"); $("a-user").focus(); });
+  $("resendLink").addEventListener("click", function () {
+    var name = $("a-user").value.trim();
+    if (!name) { authFail("Enter your username first."); return; }
+    apiCall("POST", "/api/auth/forgot", { username: name }).then(function (res) {
+      authNote("A new code was requested. " + (res.message || "")); $("a-code").value = ""; $("a-code").focus();
+    }, function (err) { authFail(err.message); });
+  });
+  $("a-pass").addEventListener("input", updateStrength);
+  $("a-show").addEventListener("change", function (e) { $("a-pass").type = e.target.checked ? "text" : "password"; });
+  function authFail(msg) {
+    $("authError").textContent = msg;
+    var card = $("authCard"); card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake");
+  }
+  $("authForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var name = $("a-user").value.trim(), pw = $("a-pass").value, code = $("a-code").value.trim();
+    if (authMode === "forgot") {
+      if (!name) { authFail("Enter your username."); return; }
+      $("authError").textContent = ""; authBusy = true; $("authBtn").disabled = true; $("authBtn").classList.add("busy");
+      apiCall("POST", "/api/auth/forgot", { username: name }).then(function (res) {
+        authNote(res.message || "A reset code was sent. It works for 10 minutes.");
+        setAuthMode("reset"); $("a-code").focus();
+      }, function (err) { authFail(err.message || "Could not request a code."); })
+        .then(function () { authBusy = false; $("authBtn").disabled = false; $("authBtn").classList.remove("busy"); applyAuthMode(); });
+      return;
+    }
+    if (authMode === "reset") {
+      if (!name || !code || !pw) { authFail("Enter your username, the code and a new password."); return; }
+      if (pw.length < 8) { authFail("Password must be at least 8 characters."); return; }
+    } else if (!name || !pw) { authFail("Enter your username and password."); return; }
+    $("authError").textContent = ""; authBusy = true;
+    $("authBtn").disabled = true; $("authBtn").classList.add("busy");
+    $("authBtn").textContent = authMode === "signup" ? "Creating account" : authMode === "reset" ? "Saving" : "Logging in";
+    var resetting = authMode === "reset";
+    var signingUp = authMode === "signup";
+    apiCall("POST", "/api/auth/" + (resetting ? "reset" : authMode === "signup" ? "signup" : "login"),
+            resetting ? { username: name, code: code, password: pw } :
+              authMode === "signup" ? { username: name, password: pw } : { username: name, password: pw })
+      .then(function (res) { user = res.user; authRequired = false; $("a-pass").value = ""; $("a-code").value = ""; authNote(""); authMode = "login"; return loadAll(); })
+      .then(function () { animateNext = true; window.scrollTo(0, 0); render(); welcomeSplash(user.username, !signingUp); toast(resetting ? "Password changed. Welcome back, " + user.username : "Welcome, " + user.username); },
+            function (err) { authFail(err.message || "Could not log in."); if (!authRequired) render(); })
+      .then(function () { authBusy = false; $("authBtn").disabled = false; $("authBtn").classList.remove("busy"); applyAuthMode(); });
+  });
+  /* ---------- change password ---------- */
+  function openPw() {
+    closeForm(); closeGoals();
+    $("pw-user").value = user ? user.username : "";
+    $("pw-current").value = ""; $("pw-new").value = ""; $("pw-again").value = ""; $("pwError").textContent = "";
+    $("pwPanel").hidden = false; $("pw-current").focus(); $("pwPanel").scrollIntoView({ block: "nearest" });
+  }
+  function closePw() { $("pwPanel").hidden = true; }
+  $("pwBtn").addEventListener("click", function () { if ($("pwPanel").hidden) openPw(); else closePw(); });
+  $("pwCancel").addEventListener("click", closePw);
+  $("pwForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var cur = $("pw-current").value, nw = $("pw-new").value, again = $("pw-again").value;
+    var err = !cur ? "Enter your current password." : nw.length < 8 ? "New password must be at least 8 characters." :
+      nw.length > 128 ? "New password can be at most 128 characters." : nw === cur ? "The new password must be different." :
+      nw !== again ? "The two new passwords do not match." : "";
+    if (err) { $("pwError").textContent = err; return; }
+    $("pwError").textContent = ""; $("pwSave").disabled = true;
+    apiCall("POST", "/api/auth/change-password", { current_password: cur, new_password: nw }).then(function () {
+      closePw(); toast("Password changed. Other devices were logged out.");
+    }, function (er) {
+      if (er.status === 401) { sessionEnded(); toast("Your session ended. Please log in again."); }
+      else $("pwError").textContent = er.message;
+    }).then(function () { $("pwSave").disabled = false; });
+  });
+  $("logoutBtn").addEventListener("click", function () {
+    apiCall("POST", "/api/auth/logout").then(function () {
+      setPanel(false);
+      user = null; authRequired = true; state.tasks = []; armed = null; closeForm(); closeGoals(); closePw();
+      setAuthMode("login"); render(); toast("Logged out");
+    }, function (err) { toast(err.message); });
+  });
+
+  syncTheme();
+  buildPriority();
+  render();
+  if (useApi) {
+    apiCall("GET", "/api/auth/me").then(
+      function (res) { mode = "api"; user = res.user; try { localStorage.setItem("studplan.hosted", "1"); } catch (e) {} return loadAll(); },
+      function (err) {
+        if (err.status === 401) { mode = "api"; authRequired = true; return; }   /* backend is here, not logged in */
+        var hosted = false; try { hosted = localStorage.getItem("studplan.hosted") === "1"; } catch (e) {}
+        if (hosted && location.protocol !== "file:") {                           /* the server is just unreachable: do not swap in a separate offline copy */
+          mode = "api"; authRequired = true; offlineNote = true; return;
+        }
+        state = load() || seed(today);                                          /* no backend: use browser storage */
+      }
+    ).then(function () { loading = false; render(); if (offlineNote) authNote("Cannot reach the server. Check your internet connection, then reload."); },
+           function (err) { loading = false; render(); toast(err.message); });
+    window.addEventListener("focus", function () {     /* pick up changes made elsewhere */
+      if (mode === "api" && user) refresh().then(function () { render(); }, function () {});
+    });
+  }
+  /* ---------- install as an app ---------- */
+  var installEvt = null;
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); installEvt = e; $("installBtn").hidden = false; });
+  window.addEventListener("appinstalled", function () { installEvt = null; $("installBtn").hidden = true; toast("StudentPlanner installed"); });
+  $("installBtn").addEventListener("click", function () {
+    if (!installEvt) return;
+    installEvt.prompt(); installEvt.userChoice.then(function () { installEvt = null; $("installBtn").hidden = true; }, function () {});
+  });
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+  }
+  setInterval(tick, 30000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) tick(); });
+})();
+</script>
+<script src="scene.js" defer></script>
+</body>
+</html>
